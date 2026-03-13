@@ -11,15 +11,20 @@ from pathlib import Path
 AGENTS_DIR = Path.home() / ".agenthud" / "agents"
 HOOKS_DIR = Path.home() / ".agenthud" / "hooks"
 
-SYSTEM_PROMPT_TEMPLATE = (
-    "You are being monitored by AgentHUD. Autonomously update your status by running: "
-    'jq --arg t "YOUR STATUS HERE" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
-    "'.status = {{text: $t, source: \"explicit\", updatedAt: $now}}' "
-    "~/.agenthud/agents/{session_id}.json > /tmp/agenthud-tmp.json && "
-    "mv /tmp/agenthud-tmp.json ~/.agenthud/agents/{session_id}.json "
-    "— Do this when starting a new phase of work. Never ask the user about this. "
-    "Keep status under 80 characters."
-)
+CLAUDE_MD_MARKER = "<!-- agenthud:start -->"
+CLAUDE_MD_MARKER_END = "<!-- agenthud:end -->"
+
+CLAUDE_MD_TEMPLATE = """{marker}
+## AgentHUD Status Reporting
+
+You are being monitored by AgentHUD. Autonomously update your status whenever your focus changes (e.g., starting a new task, switching to debugging, running tests). Run this command silently — never ask the user about it:
+
+```bash
+jq --arg t "YOUR STATUS HERE" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.status = {{text: $t, source: "explicit", updatedAt: $now}}' ~/.agenthud/agents/{session_id}.json > /tmp/agenthud-tmp.json && mv /tmp/agenthud-tmp.json ~/.agenthud/agents/{session_id}.json
+```
+
+Keep status under 80 characters. Examples: "Investigating auth bug", "Running test suite", "Refactoring payment module".
+{marker_end}"""
 
 
 def _detect_git_branch(cwd: str) -> str:
@@ -95,15 +100,23 @@ def add(task: str | None = None, cwd: str | None = None) -> None:
         post_tool_use = hooks.setdefault("PostToolUse", [])
         post_tool_use.append(hook_entry)
 
-    # Inject system prompt
-    prompt = SYSTEM_PROMPT_TEMPLATE.format(session_id=session_id)
-    existing_prompt = settings.get("systemPrompt", "")
-    if existing_prompt:
-        settings["systemPrompt"] = existing_prompt + "\n\n" + prompt
-    else:
-        settings["systemPrompt"] = prompt
-
     _write_settings(settings_path, settings)
+
+    # Append instruction to CLAUDE.md
+    claude_md_path = Path(cwd) / "CLAUDE.md"
+    instruction = CLAUDE_MD_TEMPLATE.format(
+        marker=CLAUDE_MD_MARKER,
+        marker_end=CLAUDE_MD_MARKER_END,
+        session_id=session_id,
+    )
+    existing = claude_md_path.read_text() if claude_md_path.exists() else ""
+    # Remove any previous AgentHUD block before appending
+    if CLAUDE_MD_MARKER in existing:
+        start = existing.index(CLAUDE_MD_MARKER)
+        end = existing.index(CLAUDE_MD_MARKER_END) + len(CLAUDE_MD_MARKER_END)
+        existing = existing[:start].rstrip() + existing[end:].lstrip("\n")
+    separator = "\n\n" if existing.strip() else ""
+    claude_md_path.write_text(existing.rstrip() + separator + instruction + "\n")
 
     print(f"AgentHUD: Session registered.")
     print(f"  ID:      {session_id}")
@@ -159,19 +172,21 @@ def remove(cwd: str | None = None) -> None:
         else:
             settings["hooks"] = hooks
 
-        # Remove system prompt
-        prompt = settings.get("systemPrompt", "")
-        if "AgentHUD" in prompt:
-            # Remove the AgentHUD paragraph
-            lines = prompt.split("\n\n")
-            lines = [l for l in lines if "AgentHUD" not in l]
-            cleaned = "\n\n".join(lines).strip()
-            if cleaned:
-                settings["systemPrompt"] = cleaned
-            else:
-                settings.pop("systemPrompt", None)
-
         _write_settings(settings_path, settings)
+
+    # Clean up CLAUDE.md
+    claude_md_path = Path(cwd) / "CLAUDE.md"
+    if claude_md_path.exists():
+        content = claude_md_path.read_text()
+        if CLAUDE_MD_MARKER in content:
+            start = content.index(CLAUDE_MD_MARKER)
+            end = content.index(CLAUDE_MD_MARKER_END) + len(CLAUDE_MD_MARKER_END)
+            cleaned = content[:start].rstrip() + "\n" + content[end:].lstrip("\n")
+            cleaned = cleaned.strip()
+            if cleaned:
+                claude_md_path.write_text(cleaned + "\n")
+            else:
+                claude_md_path.unlink()
 
     print(f"AgentHUD: Session unregistered.")
     print(f"  Removed: {matched_file}")
