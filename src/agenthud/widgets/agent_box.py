@@ -37,7 +37,7 @@ class AgentBox(Widget):
         margin-top: 1;
     }
     AgentBox.stale {
-        border: solid $text-muted;
+        border: solid $foreground-muted;
     }
     AgentBox.stale .header {
         color: $text-muted;
