@@ -3,13 +3,13 @@
 A standalone TUI dashboard that monitors Claude Code agent sessions in real-time.
 
 ```
-┌─ ● moonpay-api ─ rameez-j/buen-1579 ─ BUEN-1579 ──── 30s ─┐
+┌─ ● moonpay-api ─ rameez-j/buen-1579 ─ BUEN-1579 ──── 30s ─────┐
 │                                                               │
 │  Restoring deleted queue tests and fixing CI                  │
 │                                                               │
 │  ↳ Edited DisputeEvidenceResolver.unit.test.ts                │
 │  ↳ Ran: git push                                              │
-│  ↳ Ran: gh pr checks 35389 --repo moonpay/moonpay-api        │
+│  ↳ Ran: gh pr checks 35389 --repo moonpay/moonpay-api         │
 │                                                               │
 │  Uptime: 1h 23m                                               │
 └───────────────────────────────────────────────────────────────┘
@@ -17,7 +17,7 @@ A standalone TUI dashboard that monitors Claude Code agent sessions in real-time
 
 ## Why
 
-Long-running Claude Code agents are a black box. You have no way to know what stage an agent is at without switching to that terminal and scrolling through output. AgentHUD gives you a single dashboard showing all your agents at a glance.
+Long-running Claude Code agents can be a black box. You have no way to know what stage an agent is at without switching to that terminal and scrolling through output. AgentHUD gives you a single dashboard showing all your agents at a glance.
 
 ## How it works
 
@@ -87,12 +87,12 @@ The dashboard shows all registered agents in a responsive grid that adapts to yo
 
 ### Keyboard shortcuts
 
-| Key | Action |
-|-----|--------|
-| `q` | Quit |
-| `d` | Remove selected agent |
-| `↑`/`k` | Previous agent |
-| `↓`/`j` | Next agent |
+| Key     | Action                |
+|---------|-----------------------|
+| `q`     | Quit                  |
+| `d`     | Remove selected agent |
+| `↑`/`k` | Previous agent        |
+| `↓`/`j` | Next agent            |
 
 ### Unregister an agent
 
