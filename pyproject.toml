@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agenthud"
+version = "0.1.0"
+description = "TUI dashboard for monitoring Claude Code agent sessions"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "textual-dev",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.scripts]
+agenthud = "agenthud.app:main"
