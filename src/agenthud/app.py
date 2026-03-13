@@ -114,9 +114,16 @@ def main():
     elif command == "uninstall":
         from agenthud.installer import uninstall
         uninstall()
+    elif command == "add":
+        from agenthud.register import add
+        task = " ".join(args[1:]) if len(args) > 1 else None
+        add(task=task)
+    elif command == "remove":
+        from agenthud.register import remove
+        remove()
     else:
         print(f"Unknown command: {command}")
-        print("Usage: agenthud [install|uninstall]")
+        print("Usage: agenthud [install|uninstall|add|remove]")
         sys.exit(1)
 
 
