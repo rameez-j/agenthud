@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -99,8 +100,25 @@ class AgentHudApp(App):
 
 
 def main():
-    app = AgentHudApp()
-    app.run()
+    args = sys.argv[1:]
+
+    if not args:
+        app = AgentHudApp()
+        app.run()
+        return
+
+    command = args[0]
+
+    if command == "install":
+        from agenthud.installer import install
+        install()
+    elif command == "uninstall":
+        from agenthud.installer import uninstall
+        uninstall()
+    else:
+        print(f"Unknown command: {command}")
+        print("Usage: agenthud [install|uninstall]")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
