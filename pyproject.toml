@@ -20,3 +20,7 @@ dev = [
 
 [project.scripts]
 agenthud = "agenthud.app:main"
+
+[tool.hatch.build.targets.wheel.force-include]
+"hooks" = "agenthud/data/hooks"
+"skills" = "agenthud/data/skills"

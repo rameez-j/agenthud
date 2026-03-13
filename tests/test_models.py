@@ -158,6 +158,56 @@ class TestAgentStatus:
         agent = AgentStatus.from_file(f)
         assert "1h" in agent.uptime_display
 
+    def test_display_status_uses_most_recent_action(self, tmp_path):
+        data = {
+            "id": "123",
+            "registeredAt": "2026-03-13T12:00:00Z",
+            "lastHeartbeat": "2026-03-13T12:35:00Z",
+            "repo": "r",
+            "branch": "b",
+            "workingDirectory": "/p",
+            "ticketId": None,
+            "status": {"text": "", "source": "tool", "updatedAt": "2026-03-13T12:35:00Z"},
+            "recentActions": [
+                {"timestamp": "2026-03-13T12:35:00Z", "tool": "Edit", "summary": "Edited newest.ts"},
+                {"timestamp": "2026-03-13T12:34:00Z", "tool": "Read", "summary": "Read oldest.ts"},
+            ],
+        }
+        f = tmp_path / "agent.json"
+        f.write_text(json.dumps(data))
+
+        agent = AgentStatus.from_file(f)
+        assert agent.display_status == "Edited newest.ts"
+
+    def test_from_file_malformed_action_entries(self, tmp_path):
+        data = {
+            "id": "123",
+            "registeredAt": "2026-03-13T12:00:00Z",
+            "lastHeartbeat": "2026-03-13T12:35:00Z",
+            "repo": "r",
+            "branch": "b",
+            "workingDirectory": "/p",
+            "ticketId": None,
+            "status": {"text": "", "source": "tool", "updatedAt": "2026-03-13T12:35:00Z"},
+            "recentActions": [
+                {"summary": "partial entry"},
+            ],
+        }
+        f = tmp_path / "agent.json"
+        f.write_text(json.dumps(data))
+
+        agent = AgentStatus.from_file(f)
+        assert agent is not None
+        assert len(agent.recent_actions) == 1
+
+    def test_from_file_missing_required_keys(self, tmp_path):
+        data = {"repo": "r"}
+        f = tmp_path / "missing.json"
+        f.write_text(json.dumps(data))
+
+        agent = AgentStatus.from_file(f)
+        assert agent is None
+
     def test_heartbeat_ago_display(self, tmp_path):
         now = datetime.now(timezone.utc)
         data = {

@@ -7,7 +7,6 @@ from textual.app import App, ComposeResult
 from textual.containers import Grid
 from textual.widgets import Header, Footer
 
-from agenthud.models import AgentStatus
 from agenthud.watcher import AgentWatcher
 from agenthud.widgets import AgentBox, EmptyState
 

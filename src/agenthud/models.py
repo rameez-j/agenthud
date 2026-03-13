@@ -41,27 +41,28 @@ class AgentStatus:
         except (json.JSONDecodeError, OSError):
             return None
 
-        status_data = data.get("status", {})
-        status = StatusInfo(
-            text=status_data.get("text", ""),
-            source=status_data.get("source", "tool"),
-            updated_at=_parse_dt(status_data.get("updatedAt")),
-        )
-
-        actions = []
-        for a in data.get("recentActions", []):
-            actions.append(
-                RecentAction(
-                    timestamp=_parse_dt(a["timestamp"]),
-                    tool=a["tool"],
-                    summary=a["summary"],
-                )
+        try:
+            status_data = data.get("status", {})
+            status = StatusInfo(
+                text=status_data.get("text", ""),
+                source=status_data.get("source", "tool"),
+                updated_at=_parse_dt(status_data.get("updatedAt")),
             )
 
-        return cls(
-            id=data["id"],
-            registered_at=_parse_dt(data["registeredAt"]),
-            last_heartbeat=_parse_dt(data["lastHeartbeat"]),
+            actions = []
+            for a in data.get("recentActions", []):
+                actions.append(
+                    RecentAction(
+                        timestamp=_parse_dt(a.get("timestamp", "")),
+                        tool=a.get("tool", "Unknown"),
+                        summary=a.get("summary", ""),
+                    )
+                )
+
+            return cls(
+                id=data["id"],
+                registered_at=_parse_dt(data["registeredAt"]),
+                last_heartbeat=_parse_dt(data["lastHeartbeat"]),
             repo=data.get("repo", "unknown"),
             branch=data.get("branch", "unknown"),
             working_directory=data.get("workingDirectory", ""),
@@ -70,6 +71,8 @@ class AgentStatus:
             recent_actions=actions,
             file_path=path,
         )
+        except (KeyError, TypeError):
+            return None
 
     def is_stale(self, threshold_seconds: int = 300) -> bool:
         now = datetime.now(timezone.utc)
@@ -81,7 +84,7 @@ class AgentStatus:
         if self.status.text:
             return self.status.text
         if self.recent_actions:
-            return self.recent_actions[-1].summary
+            return self.recent_actions[0].summary
         return "(no recent activity)"
 
     @property

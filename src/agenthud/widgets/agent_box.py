@@ -66,7 +66,7 @@ class AgentBox(Widget):
         yield Static(header, classes="header")
         yield Static(agent.display_status, classes="status-line")
 
-        for action in agent.recent_actions[-3:]:
+        for action in agent.recent_actions[:3]:
             yield Static(f"  ↳ {action.summary}", classes="action")
 
         yield Static(f"Uptime: {agent.uptime_display}", classes="uptime")
