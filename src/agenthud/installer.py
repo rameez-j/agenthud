@@ -11,7 +11,8 @@ AGENTS_DIR = AGENTHUD_DIR / "agents"
 HOOKS_DIR = AGENTHUD_DIR / "hooks"
 CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
-HOOK_FILES = ["session-start.sh", "session-end.sh", "post-tool-use.sh", "stop.sh", "user-prompt-submit.sh", "permission-request.sh"]
+HOOK_FILES = ["session-start.sh", "session-end.sh", "post-tool-use.sh", "stop.sh", "user-prompt-submit.sh", "permission-request.sh", "statusline.sh"]
+STATUSLINE_SCRIPT = AGENTHUD_DIR / "hooks" / "statusline.sh"
 
 HOOK_CONFIG = {
     "SessionStart": [
@@ -172,6 +173,24 @@ def install() -> None:
     sandbox["filesystem"] = filesystem
     settings["sandbox"] = sandbox
 
+    # Set up statusline integration for agent name display
+    existing_statusline = settings.get("statusLine")
+    if existing_statusline is None:
+        # No statusline configured — install ours as a simple standalone
+        settings["statusLine"] = {
+            "type": "command",
+            "command": f"bash {STATUSLINE_SCRIPT}",
+        }
+        print("  Statusline installed (agent names + metrics)")
+    elif (
+        isinstance(existing_statusline, dict)
+        and "agenthud" not in existing_statusline.get("command", "")
+    ):
+        # User has their own statusline — tell them how to integrate
+        print(f"  Statusline: existing config detected, skipped.")
+        print(f"    To show agent names, add this to your statusline script:")
+        print(f"    source ~/.agenthud/hooks/statusline.sh")
+
     _write_settings(settings)
     print("  Hooks registered in ~/.claude/settings.json")
     print("  Sandbox write access granted for ~/.agenthud")
@@ -230,6 +249,12 @@ def uninstall() -> None:
             settings["sandbox"] = sandbox
         else:
             settings.pop("sandbox", None)
+
+    # Remove statusline if it's ours
+    statusline = settings.get("statusLine", {})
+    if isinstance(statusline, dict) and "agenthud" in statusline.get("command", ""):
+        settings.pop("statusLine", None)
+        print("  Statusline removed")
 
     _write_settings(settings)
     print("  Hooks removed from ~/.claude/settings.json")

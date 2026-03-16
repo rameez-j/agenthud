@@ -75,9 +75,23 @@ agenthud install
 
 - Checks that `jq` is available
 - Creates `~/.agenthud/agents/` and `~/.agenthud/hooks/`
-- Copies 6 hook scripts to `~/.agenthud/hooks/`
+- Copies hook scripts to `~/.agenthud/hooks/`
 - Registers hooks in `~/.claude/settings.json`
 - Grants sandbox write access to `~/.agenthud` so agents can update their status
+- Sets up the statusline integration (agent names in Claude Code's status bar)
+
+### Statusline integration
+
+If you don't have an existing Claude Code statusline, `agenthud install` sets one up automatically. This shows the agent name (e.g. `[Alpha]`) in each Claude Code session's status bar, making it easy to match terminals to dashboard entries.
+
+If you already have a custom statusline, the installer will skip it and show you how to integrate. Add this to your existing statusline script:
+
+```bash
+# AgentHUD: show agent name + sync metrics to dashboard
+source ~/.agenthud/hooks/statusline.sh
+```
+
+The statusline integration also syncs **context window usage** and **estimated cost** to the dashboard. These metrics are read from the JSON that Claude Code provides to the statusline script — no extra configuration needed. If your statusline doesn't provide this data, the dashboard still works but those fields won't appear.
 
 ## Usage
 
