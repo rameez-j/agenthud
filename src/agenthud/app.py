@@ -35,7 +35,7 @@ class AgentHudApp(App):
 
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("d", "remove_agent", "Remove"),
+        ("d", "toggle_remove", "Remove"),
         ("down", "focus_next", "Next"),
         ("up", "focus_previous", "Previous"),
         ("j", "focus_next", "Next"),
@@ -102,16 +102,34 @@ class AgentHudApp(App):
         elif agents and empty:
             empty.first().remove()
 
+    def action_toggle_remove(self) -> None:
+        if getattr(self, "_pending_remove", None) is not None:
+            self.action_confirm_remove()
+        else:
+            self.action_remove_agent()
+
     def action_remove_agent(self) -> None:
         focused = self.focused
         if isinstance(focused, AgentBox):
-            agent_id = focused.agent_id
-            self.watcher.remove_agent(agent_id)
-            self._agent_boxes.pop(agent_id, None)
-            focused.remove()
-            # Show empty state if no agents left
-            if not self._agent_boxes:
-                self.query_one("#agent-grid", Grid).mount(EmptyState())
+            name = focused.agent.name
+            self._pending_remove = focused
+            self.notify(
+                f"Remove {name}? You'll need to restart the Claude Code session to re-add it. Press [b]d[/b] again to confirm.",
+                title="Confirm removal",
+                timeout=5,
+            )
+
+    def action_confirm_remove(self) -> None:
+        box = getattr(self, "_pending_remove", None)
+        if box is None:
+            return
+        agent_id = box.agent_id
+        self.watcher.remove_agent(agent_id)
+        self._agent_boxes.pop(agent_id, None)
+        box.remove()
+        self._pending_remove = None
+        if not self._agent_boxes:
+            self.query_one("#agent-grid", Grid).mount(EmptyState())
 
 
 def _build_parser() -> argparse.ArgumentParser:
