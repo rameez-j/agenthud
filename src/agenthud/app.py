@@ -5,7 +5,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Grid
-from textual.widgets import Header, Footer
+from textual.widgets import Header, Footer, Static
 
 from agenthud.watcher import AgentWatcher
 from agenthud.widgets import AgentBox, EmptyState
@@ -16,8 +16,14 @@ STALE_THRESHOLD = 300  # 5 minutes
 
 class AgentHudApp(App):
     TITLE = "AgentHUD"
+    SUB_TITLE = "No agents"
 
     CSS = """
+    #legend {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
+    }
     #agent-grid {
         layout: grid;
         grid-size: 1;
@@ -41,8 +47,11 @@ class AgentHudApp(App):
         self.watcher = AgentWatcher(AGENTS_DIR)
         self._agent_boxes: dict[str, AgentBox] = {}
 
+    LEGEND = "[yellow]●[/yellow] Working  [#ff8c00]●[/#ff8c00] Needs input  [green]●[/green] Done"
+
     def compose(self) -> ComposeResult:
         yield Header()
+        yield Static(self.LEGEND, id="legend")
         yield Grid(id="agent-grid")
         yield Footer()
 
@@ -78,6 +87,13 @@ class AgentHudApp(App):
                 box = AgentBox(agent)
                 self._agent_boxes[agent_id] = box
                 grid.mount(box)
+
+        # Update subtitle with agent names
+        if agents:
+            names = [a.name for a in agents.values()]
+            self.sub_title = " | ".join(sorted(names))
+        else:
+            self.sub_title = "No agents"
 
         # Handle empty state
         empty = self.query("EmptyState")
@@ -116,11 +132,21 @@ def main():
         uninstall()
     elif command == "add":
         from agenthud.register import add
-        task = " ".join(args[1:]) if len(args) > 1 else None
-        add(task=task)
+        session_id = None
+        remaining = args[1:]
+        if len(remaining) >= 2 and remaining[0] == "--session-id":
+            session_id = remaining[1]
+            remaining = remaining[2:]
+        task = " ".join(remaining) if remaining else None
+        add(session_id=session_id, task=task)
     elif command == "remove":
         from agenthud.register import remove
-        remove()
+        session_id = None
+        remaining = args[1:]
+        if len(remaining) >= 2 and remaining[0] == "--session-id":
+            session_id = remaining[1]
+            remaining = remaining[2:]
+        remove(session_id=session_id)
     else:
         print(f"Unknown command: {command}")
         print("Usage: agenthud [install|uninstall|add|remove]")

@@ -22,8 +22,16 @@ class RecentAction:
 
 
 @dataclass
+class TaskItem:
+    id: str
+    subject: str
+    status: str  # "pending" | "in_progress" | "completed"
+
+
+@dataclass
 class AgentStatus:
     id: str
+    name: str
     registered_at: datetime
     last_heartbeat: datetime
     repo: str
@@ -31,7 +39,14 @@ class AgentStatus:
     working_directory: str
     ticket_id: Optional[str]
     status: StatusInfo
+    state: str = "working"  # "working" | "asking" | "done"
     recent_actions: list[RecentAction] = field(default_factory=list)
+    tasks: list[TaskItem] = field(default_factory=list)
+    status_history: list[StatusInfo] = field(default_factory=list)
+    context_pct: Optional[float] = None
+    cost_usd: Optional[float] = None
+    git_added: int = 0
+    git_removed: int = 0
     file_path: Optional[Path] = None
 
     @classmethod
@@ -59,18 +74,46 @@ class AgentStatus:
                     )
                 )
 
+            tasks = []
+            for t in data.get("tasks", []):
+                tasks.append(
+                    TaskItem(
+                        id=str(t.get("id", "")),
+                        subject=t.get("subject", ""),
+                        status=t.get("status", "pending"),
+                    )
+                )
+
+            status_history = []
+            for sh in data.get("statusHistory", []):
+                status_history.append(
+                    StatusInfo(
+                        text=sh.get("text", ""),
+                        source=sh.get("source", "tool"),
+                        updated_at=_parse_dt(sh.get("updatedAt")),
+                    )
+                )
+
             return cls(
                 id=data["id"],
+                name=data.get("name", "Agent"),
                 registered_at=_parse_dt(data["registeredAt"]),
                 last_heartbeat=_parse_dt(data["lastHeartbeat"]),
-            repo=data.get("repo", "unknown"),
-            branch=data.get("branch", "unknown"),
-            working_directory=data.get("workingDirectory", ""),
-            ticket_id=data.get("ticketId"),
-            status=status,
-            recent_actions=actions,
-            file_path=path,
-        )
+                repo=data.get("repo", "unknown"),
+                branch=data.get("branch", "unknown"),
+                working_directory=data.get("workingDirectory", ""),
+                ticket_id=data.get("ticketId"),
+                status=status,
+                state=data.get("state", "working"),
+                recent_actions=actions,
+                tasks=tasks,
+                status_history=status_history,
+                context_pct=data.get("contextWindow", {}).get("usedPct"),
+                cost_usd=data.get("cost", {}).get("estimated"),
+                git_added=data.get("gitDiff", {}).get("added", 0),
+                git_removed=data.get("gitDiff", {}).get("removed", 0),
+                file_path=path,
+            )
         except (KeyError, TypeError):
             return None
 

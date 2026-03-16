@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -7,11 +8,76 @@ from pathlib import Path
 AGENTHUD_DIR = Path.home() / ".agenthud"
 AGENTS_DIR = AGENTHUD_DIR / "agents"
 HOOKS_DIR = AGENTHUD_DIR / "hooks"
-SKILLS_DIR = Path.home() / ".claude" / "skills"
+CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
+
+HOOK_FILES = ["session-start.sh", "session-end.sh", "post-tool-use.sh", "stop.sh", "user-prompt-submit.sh", "permission-request.sh"]
+
+HOOK_CONFIG = {
+    "SessionStart": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash ~/.agenthud/hooks/session-start.sh",
+                }
+            ]
+        }
+    ],
+    "SessionEnd": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash ~/.agenthud/hooks/session-end.sh",
+                }
+            ]
+        }
+    ],
+    "PostToolUse": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash ~/.agenthud/hooks/post-tool-use.sh",
+                }
+            ]
+        }
+    ],
+    "Stop": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash ~/.agenthud/hooks/stop.sh",
+                }
+            ]
+        }
+    ],
+    "UserPromptSubmit": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash ~/.agenthud/hooks/user-prompt-submit.sh",
+                }
+            ]
+        }
+    ],
+    "PermissionRequest": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "bash ~/.agenthud/hooks/permission-request.sh",
+                }
+            ]
+        }
+    ],
+}
 
 
 def _find_data_dir() -> Path:
-    """Find the data directory containing hooks/ and skills/.
+    """Find the data directory containing hooks/.
 
     Checks two locations:
     1. Bundled package data (pipx install)
@@ -28,9 +94,23 @@ def _find_data_dir() -> Path:
         return repo_root
 
     raise FileNotFoundError(
-        "Could not find hooks/ and skills/ directories. "
+        "Could not find hooks/ directory. "
         "Reinstall with: pipx install . or pip install -e ."
     )
+
+
+def _read_settings() -> dict:
+    if CLAUDE_SETTINGS.exists():
+        try:
+            return json.loads(CLAUDE_SETTINGS.read_text())
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _write_settings(settings: dict) -> None:
+    CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    CLAUDE_SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
 
 
 def install() -> None:
@@ -39,45 +119,114 @@ def install() -> None:
 
     data_dir = _find_data_dir()
 
-    # Copy hook
-    hook_src = data_dir / "hooks" / "post-tool-use.sh"
-    hook_dst = HOOKS_DIR / "post-tool-use.sh"
-    if hook_src.exists():
-        shutil.copy2(hook_src, hook_dst)
-        hook_dst.chmod(0o755)
-        print(f"  Hook installed: {hook_dst}")
-    else:
-        print(f"  Warning: hook not found at {hook_src}")
+    # Copy hook scripts
+    for hook_file in HOOK_FILES:
+        src = data_dir / "hooks" / hook_file
+        dst = HOOKS_DIR / hook_file
+        if src.exists():
+            shutil.copy2(src, dst)
+            dst.chmod(0o755)
+            print(f"  Hook installed: {dst}")
+        else:
+            print(f"  Warning: hook not found at {src}")
 
-    # Symlink skills
-    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
-    skills_src = data_dir / "skills"
-    for skill_dir in skills_src.iterdir():
-        if skill_dir.is_dir():
-            link = SKILLS_DIR / skill_dir.name
-            if link.exists() or link.is_symlink():
-                link.unlink()
-            link.symlink_to(skill_dir)
-            print(f"  Skill linked: {link} -> {skill_dir}")
+    # Register hooks in global Claude settings
+    settings = _read_settings()
+    hooks = settings.setdefault("hooks", {})
+
+    for event, config in HOOK_CONFIG.items():
+        existing = hooks.get(event, [])
+        # Check if agenthud hook already present
+        already_installed = any(
+            "~/.agenthud/hooks/" in h.get("command", "")
+            for entry in existing
+            for h in entry.get("hooks", [])
+        )
+        if not already_installed:
+            existing.extend(config)
+            hooks[event] = existing
+
+    settings["hooks"] = hooks
+
+    # Allow sandbox writes to ~/.agenthud so agents can update status directly
+    sandbox = settings.setdefault("sandbox", {})
+    filesystem = sandbox.setdefault("filesystem", {})
+    allow_write = filesystem.get("allowWrite", [])
+    if "~/.agenthud" not in allow_write:
+        allow_write.append("~/.agenthud")
+        filesystem["allowWrite"] = allow_write
+    sandbox["filesystem"] = filesystem
+    settings["sandbox"] = sandbox
+
+    _write_settings(settings)
+    print("  Hooks registered in ~/.claude/settings.json")
+    print("  Sandbox write access granted for ~/.agenthud")
 
     print("\nAgentHUD installed successfully.")
-    print("  Run /agenthud add in a Claude Code session to register.")
+    print("  Sessions auto-register when Claude Code starts.")
     print("  Run agenthud in a terminal to open the dashboard.")
 
 
 def uninstall() -> None:
-    # Remove hook
-    hook = HOOKS_DIR / "post-tool-use.sh"
-    if hook.exists():
-        hook.unlink()
-        print(f"  Removed hook: {hook}")
+    # Remove hook scripts
+    for hook_file in HOOK_FILES:
+        path = HOOKS_DIR / hook_file
+        if path.exists():
+            path.unlink()
+            print(f"  Removed hook: {path}")
 
-    # Remove skill symlinks
+    # Remove hooks from global Claude settings
+    settings = _read_settings()
+    hooks = settings.get("hooks", {})
+
+    for event in HOOK_CONFIG:
+        existing = hooks.get(event, [])
+        filtered = [
+            entry for entry in existing
+            if not any(
+                "~/.agenthud/hooks/" in h.get("command", "")
+                for h in entry.get("hooks", [])
+            )
+        ]
+        if filtered:
+            hooks[event] = filtered
+        else:
+            hooks.pop(event, None)
+
+    if hooks:
+        settings["hooks"] = hooks
+    else:
+        settings.pop("hooks", None)
+
+    # Remove sandbox allowWrite entry
+    sandbox = settings.get("sandbox", {})
+    filesystem = sandbox.get("filesystem", {})
+    allow_write = filesystem.get("allowWrite", [])
+    if "~/.agenthud" in allow_write:
+        allow_write.remove("~/.agenthud")
+        if allow_write:
+            filesystem["allowWrite"] = allow_write
+        else:
+            filesystem.pop("allowWrite", None)
+        if filesystem:
+            sandbox["filesystem"] = filesystem
+        else:
+            sandbox.pop("filesystem", None)
+        if sandbox:
+            settings["sandbox"] = sandbox
+        else:
+            settings.pop("sandbox", None)
+
+    _write_settings(settings)
+    print("  Hooks removed from ~/.claude/settings.json")
+
+    # Remove old skill symlinks if they exist
+    skills_dir = Path.home() / ".claude" / "skills"
     for name in ["agenthud-add", "agenthud-remove"]:
-        link = SKILLS_DIR / name
+        link = skills_dir / name
         if link.is_symlink():
             link.unlink()
-            print(f"  Removed skill: {link}")
+            print(f"  Removed old skill: {link}")
 
     print("\nAgentHUD uninstalled.")
     print("  Agent status files in ~/.agenthud/agents/ were preserved.")

@@ -9,22 +9,32 @@ from pathlib import Path
 
 
 AGENTS_DIR = Path.home() / ".agenthud" / "agents"
-HOOKS_DIR = Path.home() / ".agenthud" / "hooks"
 
-CLAUDE_MD_MARKER = "<!-- agenthud:start -->"
-CLAUDE_MD_MARKER_END = "<!-- agenthud:end -->"
+NATO_NAMES = [
+    "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot",
+    "Golf", "Hotel", "India", "Juliet", "Kilo", "Lima",
+    "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo",
+    "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "X-ray",
+    "Yankee", "Zulu",
+]
 
-CLAUDE_MD_TEMPLATE = """{marker}
-## AgentHUD Status Reporting
 
-You are being monitored by AgentHUD. Autonomously update your status whenever your focus changes (e.g., starting a new task, switching to debugging, running tests). Run this command silently — never ask the user about it:
+def _pick_name() -> str:
+    """Pick the first unused NATO name, or fall back to NATO-N."""
+    used: set[str] = set()
+    if AGENTS_DIR.exists():
+        for path in AGENTS_DIR.glob("*.json"):
+            try:
+                data = json.loads(path.read_text())
+                used.add(data.get("name", ""))
+            except (json.JSONDecodeError, OSError):
+                continue
 
-```bash
-jq --arg t "YOUR STATUS HERE" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.status = {{text: $t, source: "explicit", updatedAt: $now}}' ~/.agenthud/agents/{session_id}.json > /tmp/agenthud-tmp.json && mv /tmp/agenthud-tmp.json ~/.agenthud/agents/{session_id}.json
-```
+    for name in NATO_NAMES:
+        if name not in used:
+            return name
 
-Keep status under 80 characters. Examples: "Investigating auth bug", "Running test suite", "Refactoring payment module".
-{marker_end}"""
+    return f"{NATO_NAMES[0]}-{len(used)}"
 
 
 def _detect_git_branch(cwd: str) -> str:
@@ -46,148 +56,64 @@ def _extract_ticket_id(*sources: str) -> str | None:
     return None
 
 
-def _read_settings(settings_path: Path) -> dict:
-    if settings_path.exists():
-        try:
-            return json.loads(settings_path.read_text())
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-def _write_settings(settings_path: Path, settings: dict) -> None:
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
-
-
-def add(task: str | None = None, cwd: str | None = None) -> None:
+def add(session_id: str | None = None, task: str | None = None, cwd: str | None = None) -> None:
     cwd = cwd or os.getcwd()
     AGENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    session_id = f"{int(datetime.now().timestamp())}-{os.getpid()}"
+    session_id = session_id or f"{int(datetime.now().timestamp())}-{os.getpid()}"
+    agent_name = _pick_name()
     repo = os.path.basename(cwd)
     branch = _detect_git_branch(cwd)
-    task_text = task or "Not yet described"
+    task_text = task or "Starting up"
     ticket_id = _extract_ticket_id(task_text, branch)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Write status file
     status = {
         "id": session_id,
+        "name": agent_name,
         "registeredAt": now,
         "lastHeartbeat": now,
         "repo": repo,
         "branch": branch,
         "workingDirectory": cwd,
         "ticketId": ticket_id,
-        "status": {"text": task_text, "source": "explicit", "updatedAt": now},
+        "status": {"text": task_text, "source": "tool", "updatedAt": now},
+        "state": "working",
         "recentActions": [],
+        "tasks": [],
     }
     status_path = AGENTS_DIR / f"{session_id}.json"
     status_path.write_text(json.dumps(status, indent=2) + "\n")
 
-    # Install hook into .claude/settings.local.json
-    hook_path = HOOKS_DIR / "post-tool-use.sh"
-    settings_path = Path(cwd) / ".claude" / "settings.local.json"
-    settings = _read_settings(settings_path)
-
-    if hook_path.exists():
-        hook_entry = {
-            "type": "command",
-            "command": f"AGENT_SESSION_ID={session_id} bash ~/.agenthud/hooks/post-tool-use.sh",
-        }
-        hooks = settings.setdefault("hooks", {})
-        post_tool_use = hooks.setdefault("PostToolUse", [])
-        post_tool_use.append(hook_entry)
-
-    _write_settings(settings_path, settings)
-
-    # Append instruction to CLAUDE.md
-    claude_md_path = Path(cwd) / "CLAUDE.md"
-    instruction = CLAUDE_MD_TEMPLATE.format(
-        marker=CLAUDE_MD_MARKER,
-        marker_end=CLAUDE_MD_MARKER_END,
-        session_id=session_id,
-    )
-    existing = claude_md_path.read_text() if claude_md_path.exists() else ""
-    # Remove any previous AgentHUD block before appending
-    if CLAUDE_MD_MARKER in existing:
-        start = existing.index(CLAUDE_MD_MARKER)
-        end = existing.index(CLAUDE_MD_MARKER_END) + len(CLAUDE_MD_MARKER_END)
-        existing = existing[:start].rstrip() + existing[end:].lstrip("\n")
-    separator = "\n\n" if existing.strip() else ""
-    claude_md_path.write_text(existing.rstrip() + separator + instruction + "\n")
-
     print(f"AgentHUD: Session registered.")
+    print(f"  Name:    {agent_name}")
     print(f"  ID:      {session_id}")
     print(f"  Repo:    {repo}")
     print(f"  Branch:  {branch}")
-    print(f"  Ticket:  {ticket_id or 'none'}")
     print(f"  Status:  {status_path}")
-    print(f"  Hook:    {'installed' if hook_path.exists() else 'not found (run agenthud install first)'}")
 
 
-def remove(cwd: str | None = None) -> None:
+def remove(session_id: str | None = None, cwd: str | None = None) -> None:
+    """Remove an agent by session_id (preferred) or by cwd."""
+    # Try by session_id first
+    if session_id:
+        path = AGENTS_DIR / f"{session_id}.json"
+        if path.exists():
+            path.unlink()
+            print(f"AgentHUD: Session unregistered ({session_id}).")
+            return
+
+    # Fall back to cwd match
     cwd = cwd or os.getcwd()
-
-    # Find agent by working directory
-    matched_file = None
-    matched_id = None
     if AGENTS_DIR.exists():
         for path in AGENTS_DIR.glob("*.json"):
             try:
                 data = json.loads(path.read_text())
                 if data.get("workingDirectory") == cwd:
-                    matched_file = path
-                    matched_id = data.get("id")
-                    break
+                    path.unlink()
+                    print(f"AgentHUD: Session unregistered ({data.get('id')}).")
+                    return
             except (json.JSONDecodeError, OSError):
                 continue
 
-    if not matched_file:
-        print("No AgentHUD session registered for this directory.")
-        return
-
-    # Delete status file
-    matched_file.unlink()
-
-    # Clean up settings.local.json
-    settings_path = Path(cwd) / ".claude" / "settings.local.json"
-    if settings_path.exists():
-        settings = _read_settings(settings_path)
-
-        # Remove hook entries
-        hooks = settings.get("hooks", {})
-        post_tool_use = hooks.get("PostToolUse", [])
-        post_tool_use = [
-            h for h in post_tool_use
-            if "post-tool-use.sh" not in h.get("command", "")
-        ]
-        if post_tool_use:
-            hooks["PostToolUse"] = post_tool_use
-        else:
-            hooks.pop("PostToolUse", None)
-        if not hooks:
-            settings.pop("hooks", None)
-        else:
-            settings["hooks"] = hooks
-
-        _write_settings(settings_path, settings)
-
-    # Clean up CLAUDE.md
-    claude_md_path = Path(cwd) / "CLAUDE.md"
-    if claude_md_path.exists():
-        content = claude_md_path.read_text()
-        if CLAUDE_MD_MARKER in content:
-            start = content.index(CLAUDE_MD_MARKER)
-            end = content.index(CLAUDE_MD_MARKER_END) + len(CLAUDE_MD_MARKER_END)
-            cleaned = content[:start].rstrip() + "\n" + content[end:].lstrip("\n")
-            cleaned = cleaned.strip()
-            if cleaned:
-                claude_md_path.write_text(cleaned + "\n")
-            else:
-                claude_md_path.unlink()
-
-    print(f"AgentHUD: Session unregistered.")
-    print(f"  Removed: {matched_file}")
-    print(f"  Hook:    removed")
+    print("No AgentHUD session found.")
