@@ -1,89 +1,93 @@
 # AgentHUD
 
-A standalone TUI dashboard that monitors Claude Code agent sessions in real-time.
+A TUI dashboard for monitoring Claude Code agent sessions in real-time.
 
 ```
-┌─ ● moonpay-api ─ rameez-j/buen-1579 ─ BUEN-1579 ──── 30s ─────┐
-│                                                               │
-│  Restoring deleted queue tests and fixing CI                  │
-│                                                               │
-│  ↳ Edited DisputeEvidenceResolver.unit.test.ts                │
-│  ↳ Ran: git push                                              │
-│  ↳ Ran: gh pr checks 35389 --repo moonpay/moonpay-api         │
-│                                                               │
-│  Uptime: 1h 23m                                               │
-└───────────────────────────────────────────────────────────────┘
+● Working  ● Needs input  ● Done
+
+┌─ Alpha ──────────────────────────────────── 5s ago ─┐
+│ ● Working  moonpay-api / feature-branch  ⏱ 1h 23m  │
+│ ─────────────────────────────────────────────────── │
+│ Status                                              │
+│   12m ago  Investigating auth bug in login flow     │
+│   8m ago   Running test suite for payments module   │
+│   ▸ Refactoring user service to async               │
+│ ─────────────────────────────────────────────────── │
+│ Activity                                            │
+│   5s ago   Edited services/user.ts                  │
+│   12s ago  Read models/auth.ts                      │
+│   30s ago  Searched for 'authenticate'              │
+│ ─────────────────────────────────────────────────── │
+│ working  │  ctx ██████░░░░ 60%  │  $4.03  │  +120 -45 │
+└─────────────────────────────────────────────────────┘
 ```
 
 ## Why
 
-Long-running Claude Code agents can be a black box. You have no way to know what stage an agent is at without switching to that terminal and scrolling through output. AgentHUD gives you a single dashboard showing all your agents at a glance.
+Running multiple Claude Code agents is a black box. You have no way to know what stage an agent is at without switching terminals and scrolling. AgentHUD gives you a single dashboard showing all your agents at a glance — what they're doing, whether they need your input, and how much context they've used.
+
+## Features
+
+- **Auto-registration** — agents appear on the dashboard automatically when a Claude Code session starts
+- **Three-state detection** — yellow (working), orange (needs your input), green (done)
+- **Status history** — last 5 status updates with timestamps, so you can see what happened while you were away
+- **Context window tracking** — progress bar showing how much context each agent has used
+- **Cost tracking** — estimated session cost with model-aware pricing (Opus/Sonnet/Haiku)
+- **Git diff stats** — lines added/removed per agent
+- **Task tracking** — picks up Claude Code's internal TaskCreate/TaskUpdate
+- **Agent names** — NATO phonetic names (Alpha, Bravo, Charlie...) shown in both the dashboard and Claude Code's status bar
+- **No server, no database, no ports** — all state lives in `~/.agenthud/agents/` as JSON files
 
 ## How it works
 
-- **No server, no database, no ports.** All state lives in `~/.agenthud/agents/<session-id>.json`.
-- A **PostToolUse hook** runs after every tool call, updating heartbeat, recent actions, and status.
-- The **dashboard** polls those files every 2 seconds and renders a responsive grid.
-- Agents **autonomously report** what they're doing via a system prompt injection — no manual updates needed.
+AgentHUD uses [Claude Code hooks](https://code.claude.com/docs/en/hooks) to track agent activity:
 
-### Status resolution (layered fallback)
+| Hook | Purpose |
+|------|---------|
+| **SessionStart** | Auto-registers the agent, assigns a name, injects status reporting instructions |
+| **SessionEnd** | Removes the agent from the dashboard |
+| **PostToolUse** | Updates heartbeat, recent actions, task list |
+| **Stop** | Detects if the agent is done or asking a question (analyzes the response) |
+| **UserPromptSubmit** | Marks the agent as working when you send a message |
+| **PermissionRequest** | Marks the agent as needing input when waiting for permission |
 
-Each agent always shows something useful. Status is resolved from three sources in priority order:
-
-1. **Explicit** (best) — Agent self-reports via system prompt. Example: *"Gathering context for BUEN-1579"*
-2. **Task-derived** (good) — Derived from the current in-progress task. Example: *"Exploring project context"*
-3. **Tool action** (baseline) — Last tool call summary. Example: *"Edited DisputeEvidenceResolver.ts"*
+The dashboard polls `~/.agenthud/agents/*.json` every 2 seconds and renders a responsive grid.
 
 ## Installation
 
-Requires Python 3.10+ and `jq`.
+Requires Python 3.10+ and [`jq`](https://jqlang.github.io/jq/).
 
 ```bash
-# Clone and install
-git clone git@github.com:rameez-j/agenthud.git
-cd agenthud
-pip install .        # or: pipx install .
-
-# Set up hooks and skills
+pipx install agenthud
 agenthud install
 ```
 
-For development:
+Or from source:
 
 ```bash
-pip install -e ".[dev]"
+git clone https://github.com/rameez-j/agenthud.git
+cd agenthud
+pipx install .
+agenthud install
 ```
 
 ### What `agenthud install` does
 
+- Checks that `jq` is available
 - Creates `~/.agenthud/agents/` and `~/.agenthud/hooks/`
-- Copies the PostToolUse hook to `~/.agenthud/hooks/post-tool-use.sh`
-- Symlinks the `/agenthud add` and `/agenthud remove` skills into `~/.claude/skills/`
+- Copies 6 hook scripts to `~/.agenthud/hooks/`
+- Registers hooks in `~/.claude/settings.json`
+- Grants sandbox write access to `~/.agenthud` so agents can update their status
 
 ## Usage
 
-### Register an agent
-
-In any Claude Code session:
-
-```
-/agenthud add Implementing auth middleware for BUEN-1579
-```
-
-This will:
-- Create a status file in `~/.agenthud/agents/`
-- Install a PostToolUse hook for automatic heartbeat and action tracking
-- Inject a system prompt so the agent autonomously updates its status
-
 ### Open the dashboard
-
-In a separate terminal:
 
 ```bash
 agenthud
 ```
 
-The dashboard shows all registered agents in a responsive grid that adapts to your terminal width (1-3 columns).
+Agents appear automatically when you start a Claude Code session. The dashboard adapts to your terminal width (1-3 columns).
 
 ### Keyboard shortcuts
 
@@ -94,47 +98,67 @@ The dashboard shows all registered agents in a responsive grid that adapts to yo
 | `↑`/`k` | Previous agent        |
 | `↓`/`j` | Next agent            |
 
-### Unregister an agent
+### CLI commands
 
-In the Claude Code session:
-
+```bash
+agenthud              # Launch the dashboard
+agenthud install      # Set up hooks and auto-registration
+agenthud uninstall    # Remove hooks and clean up
+agenthud --version    # Show version
+agenthud --help       # Show help
 ```
-/agenthud remove
-```
-
-Or press `d` on the dashboard to remove an agent.
 
 ### Uninstall
 
 ```bash
-agenthud uninstall    # Remove hooks and skill symlinks
-pip uninstall agenthud  # Remove the CLI
+agenthud uninstall
+pipx uninstall agenthud
 ```
+
+## Agent states
+
+| Color | State | Meaning |
+|-------|-------|---------|
+| Yellow | Working | Agent is actively processing |
+| Orange | Needs input | Agent asked a question or needs permission |
+| Green | Done | Agent completed the task |
+
+The state detection works by analyzing the agent's last response — if it contains a real question (not a courtesy "let me know if you need anything?"), it shows orange. Otherwise green.
 
 ## Project structure
 
 ```
 agenthud/
   src/agenthud/
-    app.py              # Textual app, layout, keybindings, CLI entry point
+    app.py              # Textual app, CLI entry point (argparse)
     models.py           # AgentStatus dataclass, JSON parsing
-    watcher.py          # File watcher, polls ~/.agenthud/agents/
-    installer.py        # install/uninstall commands
+    watcher.py          # Polls ~/.agenthud/agents/, git diff stats
+    installer.py        # install/uninstall, hook registration
+    register.py         # Agent registration, NATO name assignment
     widgets/
-      agent_box.py      # Single agent panel widget
-      empty_state.py    # "No agents registered" message
+      agent_box.py      # Agent panel widget (sectioned layout)
+      empty_state.py    # Empty state message
   hooks/
-    post-tool-use.sh    # PostToolUse hook (bash + jq)
-  skills/
-    agenthud-add/       # /agenthud add skill
-    agenthud-remove/    # /agenthud remove skill
+    session-start.sh    # Auto-register + inject status instructions
+    session-end.sh      # Auto-unregister
+    post-tool-use.sh    # Heartbeat, actions, tasks
+    stop.sh             # Done vs asking detection
+    user-prompt-submit.sh  # Mark as working
+    permission-request.sh  # Mark as needs input
   tests/
-    test_models.py      # Data model tests
-    test_watcher.py     # File watcher tests
+    test_models.py
+    test_watcher.py
 ```
 
-## Running tests
+## Development
 
 ```bash
+git clone https://github.com/rameez-j/agenthud.git
+cd agenthud
+pip install -e ".[dev]"
 pytest -v
 ```
+
+## License
+
+MIT
