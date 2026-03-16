@@ -119,8 +119,9 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="agenthud",
         description="TUI dashboard for monitoring Claude Code agent sessions",
     )
+    from agenthud import __version__
     parser.add_argument(
-        "--version", action="version", version="%(prog)s 0.1.0",
+        "--version", action="version", version=f"%(prog)s {__version__}",
     )
     sub = parser.add_subparsers(dest="command")
 
