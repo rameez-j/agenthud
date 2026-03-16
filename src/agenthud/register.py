@@ -81,6 +81,7 @@ def add(session_id: str | None = None, task: str | None = None, cwd: str | None 
         "state": "working",
         "recentActions": [],
         "tasks": [],
+        "statusHistory": [],
     }
     status_path = AGENTS_DIR / f"{session_id}.json"
     status_path.write_text(json.dumps(status, indent=2) + "\n")

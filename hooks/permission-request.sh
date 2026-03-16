@@ -3,7 +3,7 @@ set -euo pipefail
 
 # AgentHUD PermissionRequest hook
 # Fires when the agent is waiting for the user to approve/deny a tool.
-# Sets state to "waiting" in the agent status file.
+# Sets state to "asking" in the agent status file.
 
 INPUT="$(cat)"
 

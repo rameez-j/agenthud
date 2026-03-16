@@ -20,5 +20,6 @@ class EmptyState(Widget):
     def compose(self) -> ComposeResult:
         yield Static(
             "No agents registered.\n\n"
-            "Run /agenthud add in a Claude Code session to get started."
+            "Run 'agenthud install' to set up auto-registration,\n"
+            "then start a Claude Code session."
         )

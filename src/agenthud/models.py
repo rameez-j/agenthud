@@ -158,8 +158,10 @@ class AgentStatus:
         return f"{hours}h"
 
 
-def _parse_dt(value: Optional[str]) -> datetime:
+def _parse_dt(value: Optional[str], default_now: bool = True) -> datetime:
     if not value:
-        return datetime.now(timezone.utc)
+        if default_now:
+            return datetime.now(timezone.utc)
+        raise ValueError("Missing required timestamp")
     value = value.replace("Z", "+00:00")
     return datetime.fromisoformat(value)

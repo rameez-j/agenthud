@@ -2,20 +2,16 @@
 set -euo pipefail
 
 # AgentHUD PostToolUse hook
-# Receives JSON on stdin: {session_id, cwd, tool_name, tool_input, tool_result}
+# Receives JSON on stdin: {session_id, cwd, tool_name, tool_input, tool_response}
 # Updates ~/.agenthud/agents/<SESSION_ID>.json
 
 AGENTS_DIR="$HOME/.agenthud/agents"
 
 INPUT="$(cat)"
 
-eval "$(printf '%s' "$INPUT" | jq -r '
-  @sh "STDIN_SESSION_ID=\(.session_id // "")",
-  @sh "CWD=\(.cwd // "")",
-  @sh "TOOL_NAME=\(.tool_name // "")"
-')"
-
-SESSION_ID="$STDIN_SESSION_ID"
+SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // ""')"
+CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
+TOOL_NAME="$(printf '%s' "$INPUT" | jq -r '.tool_name // ""')"
 TOOL_INPUT="$(printf '%s' "$INPUT" | jq -c '.tool_input // {}')"
 TOOL_RESPONSE="$(printf '%s' "$INPUT" | jq -c '.tool_response // {}')"
 

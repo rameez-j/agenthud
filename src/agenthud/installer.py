@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -113,7 +114,20 @@ def _write_settings(settings: dict) -> None:
     CLAUDE_SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
 
 
+def _check_jq() -> bool:
+    try:
+        subprocess.run(["jq", "--version"], capture_output=True, timeout=5)
+        return True
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+
 def install() -> None:
+    if not _check_jq():
+        print("Error: jq is required but not found.")
+        print("  Install with: brew install jq (macOS) or apt install jq (Linux)")
+        return
+
     AGENTS_DIR.mkdir(parents=True, exist_ok=True)
     HOOKS_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -11,7 +12,6 @@ from agenthud.watcher import AgentWatcher
 from agenthud.widgets import AgentBox, EmptyState
 
 AGENTS_DIR = Path.home() / ".agenthud" / "agents"
-STALE_THRESHOLD = 300  # 5 minutes
 
 
 class AgentHudApp(App):
@@ -114,43 +114,49 @@ class AgentHudApp(App):
                 self.query_one("#agent-grid", Grid).mount(EmptyState())
 
 
-def main():
-    args = sys.argv[1:]
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="agenthud",
+        description="TUI dashboard for monitoring Claude Code agent sessions",
+    )
+    parser.add_argument(
+        "--version", action="version", version="%(prog)s 0.1.0",
+    )
+    sub = parser.add_subparsers(dest="command")
 
-    if not args:
+    sub.add_parser("install", help="Set up hooks and auto-registration")
+    sub.add_parser("uninstall", help="Remove hooks and clean up")
+
+    add_parser = sub.add_parser("add", help="Manually register an agent session")
+    add_parser.add_argument("--session-id", help="Claude Code session ID")
+    add_parser.add_argument("task", nargs="*", help="Initial task description")
+
+    remove_parser = sub.add_parser("remove", help="Manually unregister an agent session")
+    remove_parser.add_argument("--session-id", help="Claude Code session ID")
+
+    return parser
+
+
+def main():
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if args.command is None:
         app = AgentHudApp()
         app.run()
-        return
-
-    command = args[0]
-
-    if command == "install":
+    elif args.command == "install":
         from agenthud.installer import install
         install()
-    elif command == "uninstall":
+    elif args.command == "uninstall":
         from agenthud.installer import uninstall
         uninstall()
-    elif command == "add":
+    elif args.command == "add":
         from agenthud.register import add
-        session_id = None
-        remaining = args[1:]
-        if len(remaining) >= 2 and remaining[0] == "--session-id":
-            session_id = remaining[1]
-            remaining = remaining[2:]
-        task = " ".join(remaining) if remaining else None
-        add(session_id=session_id, task=task)
-    elif command == "remove":
+        task = " ".join(args.task) if args.task else None
+        add(session_id=args.session_id, task=task)
+    elif args.command == "remove":
         from agenthud.register import remove
-        session_id = None
-        remaining = args[1:]
-        if len(remaining) >= 2 and remaining[0] == "--session-id":
-            session_id = remaining[1]
-            remaining = remaining[2:]
-        remove(session_id=session_id)
-    else:
-        print(f"Unknown command: {command}")
-        print("Usage: agenthud [install|uninstall|add|remove]")
-        sys.exit(1)
+        remove(session_id=args.session_id)
 
 
 if __name__ == "__main__":

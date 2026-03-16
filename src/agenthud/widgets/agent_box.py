@@ -128,7 +128,7 @@ class AgentBox(Widget):
         yield Static("[bold]Status[/bold]", classes="section-heading")
         history = list(reversed(agent.status_history[:4]))
         for entry in history:
-            ago = self._time_ago(entry)
+            ago = self._fmt_ago(entry.updated_at)
             ts = f"[dim]{ago:<8}[/dim]" if ago else ""
             yield Static(f"  {ts} [dim]{entry.text}[/dim]", classes="status-past")
         yield Static(f"  ▸ {agent.display_status}", classes="status-current")
@@ -138,7 +138,7 @@ class AgentBox(Widget):
             yield Rule(classes="section-rule")
             yield Static("[bold]Activity[/bold]", classes="section-heading")
             for action in agent.recent_actions[:5]:
-                ago = self._action_time_ago(action)
+                ago = self._fmt_ago(action.timestamp)
                 yield Static(f"  [dim]{ago:<8}[/dim] {action.summary}", classes="action-item")
 
         # ── Section: Tasks ──
@@ -204,23 +204,10 @@ class AgentBox(Widget):
         return "  │  ".join(parts) if parts else ""
 
     @staticmethod
-    def _time_ago(status) -> str:
-        if not status.updated_at:
+    def _fmt_ago(dt: datetime | None) -> str:
+        if not dt:
             return ""
-        delta = (datetime.now(timezone.utc) - status.updated_at).total_seconds()
-        if delta < 60:
-            return f"{int(delta)}s ago"
-        minutes = int(delta) // 60
-        if minutes < 60:
-            return f"{minutes}m ago"
-        hours = minutes // 60
-        return f"{hours}h ago"
-
-    @staticmethod
-    def _action_time_ago(action) -> str:
-        if not action.timestamp:
-            return ""
-        delta = (datetime.now(timezone.utc) - action.timestamp).total_seconds()
+        delta = (datetime.now(timezone.utc) - dt).total_seconds()
         if delta < 60:
             return f"{int(delta)}s ago"
         minutes = int(delta) // 60
