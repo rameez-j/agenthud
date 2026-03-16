@@ -5,21 +5,21 @@ A TUI dashboard for monitoring Claude Code agent sessions in real-time.
 ```
 ● Working  ● Needs input  ● Done
 
-┌─ Alpha ──────────────────────────────────── 5s ago ─┐
-│ ● Working  moonpay-api / feature-branch  ⏱ 1h 23m  │
-│ ─────────────────────────────────────────────────── │
-│ Status                                              │
-│   12m ago  Investigating auth bug in login flow     │
-│   8m ago   Running test suite for payments module   │
-│   ▸ Refactoring user service to async               │
-│ ─────────────────────────────────────────────────── │
-│ Activity                                            │
-│   5s ago   Edited services/user.ts                  │
-│   12s ago  Read models/auth.ts                      │
-│   30s ago  Searched for 'authenticate'              │
-│ ─────────────────────────────────────────────────── │
-│ working  │  ctx ██████░░░░ 60%  │  $4.03  │  +120 -45 │
-└─────────────────────────────────────────────────────┘
+┌─ Alpha ──────────────────────────────────── 5s ago ────┐
+│ ● Working  moonpay-api / feature-branch  ⏱ 1h 23m      │
+│ ───────────────────────────────────────────────────────│
+│ Status                                                 │
+│   12m ago  Investigating auth bug in login flow        │
+│   8m ago   Running test suite for payments module      │
+│   ▸ Refactoring user service to async                  │
+│ ───────────────────────────────────────────────────────│
+│ Activity                                               │
+│   5s ago   Edited services/user.ts                     │
+│   12s ago  Read models/auth.ts                         │
+│   30s ago  Searched for 'authenticate'                 │
+│ ───────────────────────────────────────────────────────│
+│ working  │  ctx ██████░░░░ 60%  │  $4.03  │  +120 -45  │
+└────────────────────────────────────────────────────────┘
 ```
 
 ## Why
@@ -42,14 +42,14 @@ Running multiple Claude Code agents is a black box. You have no way to know what
 
 AgentHUD uses [Claude Code hooks](https://code.claude.com/docs/en/hooks) to track agent activity:
 
-| Hook | Purpose |
-|------|---------|
-| **SessionStart** | Auto-registers the agent, assigns a name, injects status reporting instructions |
-| **SessionEnd** | Removes the agent from the dashboard |
-| **PostToolUse** | Updates heartbeat, recent actions, task list |
-| **Stop** | Detects if the agent is done or asking a question (analyzes the response) |
-| **UserPromptSubmit** | Marks the agent as working when you send a message |
-| **PermissionRequest** | Marks the agent as needing input when waiting for permission |
+| Hook                  | Purpose                                                                         |
+|-----------------------|---------------------------------------------------------------------------------|
+| **SessionStart**      | Auto-registers the agent, assigns a name, injects status reporting instructions |
+| **SessionEnd**        | Removes the agent from the dashboard                                            |
+| **PostToolUse**       | Updates heartbeat, recent actions, task list                                    |
+| **Stop**              | Detects if the agent is done or asking a question (analyzes the response)       |
+| **UserPromptSubmit**  | Marks the agent as working when you send a message                              |
+| **PermissionRequest** | Marks the agent as needing input when waiting for permission                    |
 
 The dashboard polls `~/.agenthud/agents/*.json` every 2 seconds and renders a responsive grid.
 
@@ -117,11 +117,11 @@ pipx uninstall agenthud
 
 ## Agent states
 
-| Color | State | Meaning |
-|-------|-------|---------|
-| Yellow | Working | Agent is actively processing |
-| Orange | Needs input | Agent asked a question or needs permission |
-| Green | Done | Agent completed the task |
+| Color   | State       | Meaning                                    |
+|---------|-------------|--------------------------------------------|
+| Yellow  | Working     | Agent is actively processing               |
+| Orange  | Needs input | Agent asked a question or needs permission |
+| Green   | Done        | Agent completed the task                   |
 
 The state detection works by analyzing the agent's last response — if it contains a real question (not a courtesy "let me know if you need anything?"), it shows orange. Otherwise green.
 
