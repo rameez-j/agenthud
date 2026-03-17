@@ -40,14 +40,17 @@ class AgentHudApp(App):
         ("up", "focus_previous", "Previous"),
         ("j", "focus_next", "Next"),
         ("k", "focus_previous", "Previous"),
+        ("J", "move_down", "Move down"),
+        ("K", "move_up", "Move up"),
     ]
 
     def __init__(self):
         super().__init__()
         self.watcher = AgentWatcher(AGENTS_DIR)
         self._agent_boxes: dict[str, AgentBox] = {}
+        self._agent_order: list[str] = []
 
-    LEGEND = "[yellow]●[/yellow] Working  [#ff8c00]●[/#ff8c00] Needs input  [green]●[/green] Done"
+    LEGEND = "[yellow]●[/yellow] Working  [#ff8c00]●[/#ff8c00] Needs input  [green]●[/green] Done  [dim]│  j/k navigate  J/K reorder  d remove[/dim]"
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -78,6 +81,8 @@ class AgentHudApp(App):
         for agent_id in removed_ids:
             box = self._agent_boxes.pop(agent_id)
             box.remove()
+            if agent_id in self._agent_order:
+                self._agent_order.remove(agent_id)
 
         # Update existing boxes, add new ones
         for agent_id, agent in agents.items():
@@ -86,6 +91,7 @@ class AgentHudApp(App):
             else:
                 box = AgentBox(agent)
                 self._agent_boxes[agent_id] = box
+                self._agent_order.append(agent_id)
                 grid.mount(box)
 
         # Update subtitle with agent names
@@ -119,6 +125,37 @@ class AgentHudApp(App):
                 timeout=5,
             )
 
+    def _swap_agents(self, direction: int) -> None:
+        focused = self.focused
+        if not isinstance(focused, AgentBox):
+            return
+        agent_id = focused.agent_id
+        if agent_id not in self._agent_order:
+            return
+        idx = self._agent_order.index(agent_id)
+        new_idx = idx + direction
+        if new_idx < 0 or new_idx >= len(self._agent_order):
+            return
+        # Swap in order list
+        self._agent_order[idx], self._agent_order[new_idx] = (
+            self._agent_order[new_idx], self._agent_order[idx],
+        )
+        # Re-mount all boxes in new order
+        grid = self.query_one("#agent-grid", Grid)
+        for box in self._agent_boxes.values():
+            box.remove()
+        for aid in self._agent_order:
+            if aid in self._agent_boxes:
+                grid.mount(self._agent_boxes[aid])
+        # Restore focus
+        self._agent_boxes[agent_id].focus()
+
+    def action_move_up(self) -> None:
+        self._swap_agents(-1)
+
+    def action_move_down(self) -> None:
+        self._swap_agents(1)
+
     def action_confirm_remove(self) -> None:
         box = getattr(self, "_pending_remove", None)
         if box is None:
@@ -126,6 +163,8 @@ class AgentHudApp(App):
         agent_id = box.agent_id
         self.watcher.remove_agent(agent_id)
         self._agent_boxes.pop(agent_id, None)
+        if agent_id in self._agent_order:
+            self._agent_order.remove(agent_id)
         box.remove()
         self._pending_remove = None
         if not self._agent_boxes:

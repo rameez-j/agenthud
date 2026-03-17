@@ -25,7 +25,8 @@ class AgentBox(Widget):
         padding: 1 2;
     }
     AgentBox:focus {
-        border: double yellow;
+        border: heavy white;
+        border-title-color: white;
     }
 
     AgentBox .header-row {
